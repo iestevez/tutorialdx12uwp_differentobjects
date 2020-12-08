@@ -48,7 +48,7 @@ private:
 
 
     void CreateMainInputFlowResources(const Mesh& mesh);
-    Mesh												m_mesh{ std::string("Assets/mesh.dat") };
+    Mesh												m_mesh{ std::string("Assets/mes.dat") };
 
     D3D12_VERTEX_BUFFER_VIEW							m_vBufferView;
     D3D12_INDEX_BUFFER_VIEW								m_iBufferView;

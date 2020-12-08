@@ -22,6 +22,7 @@ public:
 	UINT64 GetVSize() const;
 	UINT64 GetISize() const;
 	void readFile(std::string const fileName);
+	void readObjFile(std::string const fileName);
 	std::vector<Vertex> vertices;
 	std::vector<unsigned int> indices;
 	struct Texture {
