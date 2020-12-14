@@ -30,6 +30,9 @@
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="tiny_obj_loader.h" />
+    <ClInclude Include="Error.h">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Logo.scale-200.png">
@@ -50,6 +53,21 @@
     <Image Include="Assets\tutorialtextura.dds">
       <Filter>Assets</Filter>
     </Image>
+    <Image Include="Assets\tex1.dds">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tex2.dds">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tex3.dds">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tex4.dds">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tex5.dds">
+      <Filter>Assets</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />
@@ -64,5 +82,22 @@
   <ItemGroup>
     <FxCompile Include="pixel.hlsl" />
     <FxCompile Include="vertex.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="Assets\mesh1.obj">
+      <Filter>Assets</Filter>
+    </Media>
+    <Media Include="Assets\mesh2.obj">
+      <Filter>Assets</Filter>
+    </Media>
+    <Media Include="Assets\mesh3.obj">
+      <Filter>Assets</Filter>
+    </Media>
+    <Media Include="Assets\mesh4.obj">
+      <Filter>Assets</Filter>
+    </Media>
+    <Media Include="Assets\mesh5.obj">
+      <Filter>Assets</Filter>
+    </Media>
   </ItemGroup>
 </Project>

@@ -9,6 +9,7 @@ struct Vertex {
 	XMFLOAT4 col;
 	XMFLOAT3 normal;
 	XMFLOAT2 uvcoords;
+	XMUINT3 material;
 
 };
 

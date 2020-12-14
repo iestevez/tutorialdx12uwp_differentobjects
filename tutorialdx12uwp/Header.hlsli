@@ -3,6 +3,7 @@ struct VertexIn {
 	float4 color : COLOR;
 	float3 normal : NORMAL;
 	float2 uvcoord : UV;
+	nointerpolation uint mind : MATINDEX;
 };
 
 struct VertexOut {

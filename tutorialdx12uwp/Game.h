@@ -34,29 +34,50 @@ public:
 
     // Properties
     void GetDefaultSize( int& width, int& height ) const;
+    void LoadMeshes();
 
 private:
 
+    size_t m_NumberOfMeshes;
+
+    // Per object particular information
     struct ObjectData {
-        XMFLOAT4X4											m_world;
+        XMFLOAT4X4											matrixWorld;
         UINT                                                matind;
      };
    
-    std::vector<ObjectData> objects;
+    // One shape each time
+    std::vector<std::vector<ObjectData>> m_objects; // Each element is per shape information. Each per shape information is per instance data.
+    
+    std::vector<std::shared_ptr<Mesh>>					m_meshes; // One mesh per shape
+
+
     XMFLOAT4X4											m_view;
     XMFLOAT4X4											m_projection;
 
 
-    void CreateMainInputFlowResources(const Mesh& mesh);
-    Mesh												m_mesh{ std::string("Assets/mes.dat") };
+    void CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>& mesh);
+    
 
-    D3D12_VERTEX_BUFFER_VIEW							m_vBufferView;
-    D3D12_INDEX_BUFFER_VIEW								m_iBufferView;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
+    // Vertex and index related stuff
     Microsoft::WRL::ComPtr<ID3D12Resource>              m_vBufferDefault; // Buffer para vértices
     Microsoft::WRL::ComPtr<ID3D12Resource>              m_vBufferUpload; // Buffer para vértices
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_iBufferDefault; // Buffer para vértices
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_iBufferUpload; // Buffer para vértices
+    Microsoft::WRL::ComPtr<ID3D12Resource>              m_iBufferDefault; // Buffer para indices
+    Microsoft::WRL::ComPtr<ID3D12Resource>              m_iBufferUpload; // Buffer para indices
+    D3D12_VERTEX_BUFFER_VIEW				m_vBufferView;
+    D3D12_INDEX_BUFFER_VIEW				m_iBufferView;
+    
+    // Textures related stuff
+
+    
+    
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>  m_textureDefault;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>  m_textureUpload;
+
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
+    
+    
    
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_cDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_sDescriptorHeap; // Descriptor HEap de Samplers
@@ -147,3 +168,27 @@ private:
     // Game state
     DX::StepTimer                                       m_timer;
 };
+
+namespace GameStatics {
+
+    const UINT MaxNumberOfMeshes = 10;
+
+    enum class ShapeName { SHAPE1=0 , SHAPE2=1, SHAPE3=2, SHAPE4=3, SHAPE5=4 };
+    static std::map<ShapeName,std::string>  ObjFileNames = {
+        {ShapeName::SHAPE1,"Assets/mesh1.obj"},
+        {ShapeName::SHAPE2,"Assets/mesh2.obj"},
+        {ShapeName::SHAPE3,"Assets/mesh3.obj"},
+        {ShapeName::SHAPE4,"Assets/mesh4.obj"},
+        {ShapeName::SHAPE5,"Assets/mesh5.obj"}
+    };
+    
+    enum class TexName { TEX1=0,TEX2=1,TEX3=2,TEX4=3,TEX5=4};
+    static std::map<TexName, std::wstring> TexFileNames = {
+        {TexName::TEX1,L"Assets/tex1.dds"},
+        {TexName::TEX2,L"Assets/tex2.dds"},
+        {TexName::TEX3,L"Assets/tex3.dds"},
+        {TexName::TEX4,L"Assets/tex4.dds"},
+        {TexName::TEX5,L"Assets/tex5.dds"}
+    };
+
+}

@@ -4,6 +4,9 @@
 //
 
 #pragma once
+//#include "windows.h" //OutputDebugString
+#define MYTRACE OutputDebugString
+
 
 // Use the C++ standard templated min/max
 #define NOMINMAX

@@ -23,24 +23,50 @@ Game::Game() noexcept :
 {
 }
 
+void Game::LoadMeshes() {
+    m_NumberOfMeshes = GameStatics::ObjFileNames.size();
+    m_meshes.resize(m_NumberOfMeshes);
+    m_objects.resize(m_NumberOfMeshes);
+
+    for (auto it = GameStatics::ObjFileNames.begin(); it != GameStatics::ObjFileNames.end();it++) {
+        const std::string fileName = it->second;
+        //std::shared_ptr<Mesh> ptrMesh = std::make_shared<Mesh>(); //Mesh constructor with std::string parameter tries to load the file
+        std::shared_ptr<Mesh> ptrMesh = std::make_shared<Mesh>(fileName); //Mesh constructor with std::string parameter tries to load the file
+        m_meshes[static_cast<unsigned int>(it->first)]=ptrMesh;
+     }
+}
+
 void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTATION rotation)
 {
+    // Load Assets
+    LoadMeshes();
+   
+    // Reserve space for all the objects
+    
+
     // Inicializamos matrices de transformación
 
     XMStoreFloat4x4(&m_view, XMMatrixIdentity());
     XMStoreFloat4x4(&m_projection, XMMatrixIdentity());
 
+
+
     // Inicializamos un par de objectos
     ObjectData o;
-    objects.clear();
-    XMStoreFloat4x4(&o.m_world, XMMatrixTranslation(0, 0, 0));
-    objects.push_back(o);
-    XMStoreFloat4x4(&o.m_world, XMMatrixTranslation(3, 0, 0));
-    objects.push_back(o);
-    XMStoreFloat4x4(&o.m_world, XMMatrixTranslation(-3, 0, 0));
-    objects.push_back(o);
+    std::vector<ObjectData> vobj;
+    for(auto objInstances : m_objects)
+        objInstances.clear();
+   
     
+    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(0, 0, 0));
+    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE1)].push_back(o);
+    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(3, 0, 0));
+    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE2)].push_back(o);
+    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(-3, 0, 0));
+    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE3)].push_back(o);
+
     
+    // Windows
     m_window = window; // Inicializamos a la ventana de visualización.
     m_outputWidth = std::max(width, 1); // Ancho y alto
     m_outputHeight = std::max(height, 1);
@@ -49,7 +75,7 @@ void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTAT
     CreateDevice(); // Creamos el dispotivo
     CreateResources(); // Creamos recursos que dependen del tamaño de la ventana de visualización
 
-    CreateMainInputFlowResources(m_mesh); //Creamos recursos y objetos D3D12 que permiten el flujo de entrada de datos al pipeline
+    CreateMainInputFlowResources(m_meshes); //Creamos recursos y objetos D3D12 que permiten el flujo de entrada de datos al pipeline
     LoadPrecompiledShaders(); // Cargamos shaders precompilados
 
     PSO(); // Creamos un estado del pipeline básico.
@@ -110,21 +136,23 @@ void Game::Update(DX::StepTimer const& timer)
     m_vInstanceBuffer[m_backBufferIndex]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
     auto elementSizeInstance = sizeof(vInstance);
     UINT count = 0;
-    for (auto obj : objects) {
-        XMMATRIX world = XMLoadFloat4x4(&obj.m_world);
-        XMMATRIX rotation = XMMatrixRotationX(delta);
-        XMMATRIX translation = XMMatrixTranslation(0.0, 0.0, 0.0);
-        world = world * rotation * translation;
+    for (auto shape : m_objects) {
+        for (auto obj : shape) {
+            XMMATRIX world = XMLoadFloat4x4(&obj.matrixWorld);
+            XMMATRIX rotation = XMMatrixRotationX(delta);
+            XMMATRIX translation = XMMatrixTranslation(0.0, 0.0, 0.0);
+            world = world * rotation * translation;
 
-        
-        XMMATRIX worldview = world * view;
-        XMMATRIX transform = worldview * projection;
-        XMMATRIX normaltransform = XMMatrixTranspose(XMMatrixInverse(nullptr, worldview));
-        XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].NormalTransform, XMMatrixTranspose(normaltransform));
-        XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].Transform, XMMatrixTranspose(transform));
-        m_vInstances[m_backBufferIndex].MaterialIndex = obj.matind;
-        memcpy(&data[count*elementSizeInstance], reinterpret_cast<const void*>(&m_vInstances[m_backBufferIndex]), sizeof(vInstance)); //Copia de la transformación
-        ++count;
+
+            XMMATRIX worldview = world * view;
+            XMMATRIX transform = worldview * projection;
+            XMMATRIX normaltransform = XMMatrixTranspose(XMMatrixInverse(nullptr, worldview));
+            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].NormalTransform, XMMatrixTranspose(normaltransform));
+            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].Transform, XMMatrixTranspose(transform));
+            m_vInstances[m_backBufferIndex].MaterialIndex = obj.matind;
+            memcpy(&data[count * elementSizeInstance], reinterpret_cast<const void*>(&m_vInstances[m_backBufferIndex]), sizeof(vInstance)); //Copia de la transformación
+            ++count;
+        }
     }
 
     
@@ -149,6 +177,7 @@ void Game::Render()
     Clear();
 
     // TODO: Add your rendering code here.
+    // First, we re-connect root parameters for the currente m_backBufferIndex.
     CD3DX12_GPU_DESCRIPTOR_HANDLE cHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     cHandle.Offset(2*m_backBufferIndex , m_cDescriptorSize);
     m_commandList->SetGraphicsRootDescriptorTable(0, // número de root parameter
@@ -156,8 +185,29 @@ void Game::Render()
     cHandle.Offset(1, m_cDescriptorSize);
     m_commandList->SetGraphicsRootDescriptorTable(1, // número de root parameter
         cHandle);
-    m_commandList->DrawIndexedInstanced(m_mesh.indices.size(), objects.size(), 0, 0, 0);
+
+    D3D12_VERTEX_BUFFER_VIEW vView[1] = { m_vBufferView };
+    D3D12_INDEX_BUFFER_VIEW iView[1] = { m_iBufferView };
+    m_commandList->IASetVertexBuffers(0, 1, vView);
+    m_commandList->IASetIndexBuffer(iView);
+    //--------------------------------------------------------------------------------------
+    // Now Draw IndexedInstanced Data
+    unsigned int indexStart = 0;
+    unsigned int vertexStart = 0;
+    for (int ishape = 0; ishape < m_meshes.size();ishape++) {
+        if (m_objects[ishape].size() > 0) {
+            
+            //Setting vertex and index buffers using the correct view
+           
+            // Drawing instances of the same shape.
+            m_commandList->DrawIndexedInstanced(m_meshes[ishape]->indices.size(), m_objects[ishape].size(), indexStart, vertexStart, 0);
+
+        }
+        indexStart += m_meshes[ishape]->indices.size();
+        vertexStart += m_meshes[ishape]->vertices.size();
     
+    
+    }
     // Show the new frame.
     Present();
 }
@@ -215,13 +265,14 @@ void Game::Clear()
     
      // Todo: Establecemos la vista para el buffer de indices
 
-    D3D12_VERTEX_BUFFER_VIEW aVBufferView[1] = { m_vBufferView }; // Es necesario pasar un array de buffer views
+     // Es necesario pasar un array de buffer views
+    D3D12_VERTEX_BUFFER_VIEW vView[1] = { m_vBufferView };
+    D3D12_INDEX_BUFFER_VIEW iView[1] = { m_iBufferView };
 
-    m_commandList->IASetVertexBuffers(0, 1, aVBufferView);
+    m_commandList->IASetVertexBuffers(0, 1, vView);
 
-    D3D12_INDEX_BUFFER_VIEW aIBufferView[1] = { m_iBufferView }; // Es necesario pasar un array de buffer views
-
-    m_commandList->IASetIndexBuffer(aIBufferView);
+    
+    m_commandList->IASetIndexBuffer(iView);
 
 
     /* Establecemos la topología: es obligatorio*/
@@ -657,7 +708,7 @@ void Game::OnDeviceLost()
     CreateResources();
 }
 
-void Game::CreateMainInputFlowResources(const Mesh& mesh) {
+void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>> &vMesh) {
 
     /*
     Objetivo 1.
@@ -670,133 +721,177 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
 
     */
 
+    unsigned int numberOfMeshes = vMesh.size();
+
     /*Tarea 1: Creación de los buffers.*/
     D3D12_HEAP_PROPERTIES heapProperties;
     D3D12_RESOURCE_DESC resourceDescription;
-    // Creación de los buffers default y upload para los vértices
+    size_t vSize = 0; // Total size of resource for vertices
+    size_t iSize = 0; // Total size of resource for indices
+    for (int indMesh = 0; indMesh < numberOfMeshes; indMesh++) {
+        //GameStatics::ShapeName shapeName = static_cast<GameStatics::ShapeName>(indMesh);
+        std::shared_ptr<Mesh> mesh = vMesh[indMesh];
+        vSize += mesh->GetVSize();
+        iSize += mesh->GetISize();
+    }
+
+    // Creación de los resource buffers default y upload para los vértices
     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(mesh.GetVSize());
+    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(vSize);
     DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDescription,
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        IID_PPV_ARGS(m_vBufferDefault.GetAddressOf())));
+         &heapProperties,
+         D3D12_HEAP_FLAG_NONE,
+         &resourceDescription,
+         D3D12_RESOURCE_STATE_COMMON,
+         nullptr,
+         IID_PPV_ARGS(m_vBufferDefault.GetAddressOf())));
 
-    // Ahora un buffer upload, de esta forma tenemos un puente upload para pasar a default.
-    heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDescription,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(m_vBufferUpload.GetAddressOf())));
+        // Ahora un buffer upload, de esta forma tenemos un puente upload para pasar a default.
+     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+     DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
+           &heapProperties,
+           D3D12_HEAP_FLAG_NONE,
+           &resourceDescription,
+           D3D12_RESOURCE_STATE_GENERIC_READ,
+           nullptr,
+           IID_PPV_ARGS(m_vBufferUpload.GetAddressOf())));
 
-    // Creación de los buffers default y upload para los índices
-    heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(mesh.GetISize());
-    DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDescription,
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        IID_PPV_ARGS(m_iBufferDefault.GetAddressOf())));
+     // Creación de los buffers default y upload para los índices
+     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+     resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(iSize);
+     DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
+          &heapProperties,
+          D3D12_HEAP_FLAG_NONE,
+          &resourceDescription,
+          D3D12_RESOURCE_STATE_COMMON,
+          nullptr,
+          IID_PPV_ARGS(m_iBufferDefault.GetAddressOf())));
 
-    // Ahora un buffer upload, de esta forma tenemos un puente upload para pasar a default.
+     // Ahora un buffer upload, de esta forma tenemos un puente upload para pasar a default.
 
-    heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(mesh.GetISize());
-    DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDescription,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(m_iBufferUpload.GetAddressOf())));
+     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+     resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(iSize);
+     DX::ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
+           &heapProperties,
+           D3D12_HEAP_FLAG_NONE,
+           &resourceDescription,
+           D3D12_RESOURCE_STATE_GENERIC_READ,
+           nullptr,
+           IID_PPV_ARGS(m_iBufferUpload.GetAddressOf())));
 
     /*Tarea 2: Preparamos el origen de los datos de vértices e índices.*/
+     
+     D3D12_SUBRESOURCE_DATA origen_vertices_struct;
+     origen_vertices_struct.pData = nullptr;
+     origen_vertices_struct.RowPitch = 0;
+     origen_vertices_struct.SlicePitch = 0;
+     D3D12_SUBRESOURCE_DATA origen_indices_struct;
+     origen_indices_struct.pData = nullptr;
+     origen_indices_struct.RowPitch = 0;
+     origen_indices_struct.SlicePitch = 0;
 
-    // Preparamos el  origen_vertices
-    D3D12_SUBRESOURCE_DATA origen_vertices = {};
-    origen_vertices.pData = &mesh.vertices[0];
-    origen_vertices.RowPitch = mesh.GetVSize();
-    origen_vertices.SlicePitch = origen_vertices.RowPitch;
+     std::vector<Vertex> vertexOrigin;
+     std::vector<UINT> indexOrigin;
+     // Concatenate vertex and index data
+     for (int indMesh = 0; indMesh < numberOfMeshes; indMesh++) {
 
-    D3D12_SUBRESOURCE_DATA origen_indices = {};
-    origen_indices.pData = &mesh.indices[0];
-    origen_indices.RowPitch = mesh.GetISize();
-    origen_indices.SlicePitch = origen_indices.RowPitch;
+         std::shared_ptr<Mesh> mesh = vMesh[indMesh];
+         vertexOrigin.insert(vertexOrigin.end(), mesh->vertices.begin(), mesh->vertices.end());
+         indexOrigin.insert(indexOrigin.end(), mesh->indices.begin(), mesh->indices.end());
+         
+         origen_vertices_struct.RowPitch += mesh->GetVSize();
+         origen_indices_struct.RowPitch += mesh->GetISize();
+        
+     }
 
-    /*Tarea 3: Realizamos la transferencia desde el origen hasta el buffer DEFAULT pasando por el buffer UPLOAD*/
-    /*Vértices*/
-    // Cambio de estado en el recurso de destino
-    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_vBufferDefault.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-    m_commandList->ResourceBarrier(1, &barrier);
+     origen_vertices_struct.pData = vertexOrigin.data();
+     origen_vertices_struct.SlicePitch = origen_vertices_struct.RowPitch;
+     origen_indices_struct.pData = indexOrigin.data();
+     origen_indices_struct.SlicePitch = origen_indices_struct.RowPitch;
+        /*Tarea 3: Realizamos la transferencia desde el origen hasta el buffer DEFAULT pasando por el buffer UPLOAD*/
+        /*Vértices*/
+        // Cambio de estado en el recurso de destino
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_vBufferDefault.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+            m_commandList->ResourceBarrier(1, &barrier);
 
     // Ordenamos la transferencia vertices
-    UpdateSubresources<1>(m_commandList.Get(), m_vBufferDefault.Get(), m_vBufferUpload.Get(), 0, 0, 1, &origen_vertices);
+        UpdateSubresources<1>(m_commandList.Get(), m_vBufferDefault.Get(), m_vBufferUpload.Get(), 0,0, 1, &origen_vertices_struct);
     // Cambio de estado en el recurso de destino
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_vBufferDefault.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
-    m_commandList->ResourceBarrier(1, &barrier);
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_vBufferDefault.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
+            m_commandList->ResourceBarrier(1, &barrier);
 
     /*Índices*/
     // Cambio de estado en el recurso de destino
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_iBufferDefault.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-    m_commandList->ResourceBarrier(1, &barrier);
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_iBufferDefault.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+            m_commandList->ResourceBarrier(1, &barrier);
 
-    // Ordenamos la transferencia vertices
-    UpdateSubresources<1>(m_commandList.Get(), m_iBufferDefault.Get(), m_iBufferUpload.Get(), 0, 0, 1, &origen_indices);
-    // Cambio de estado en el recurso de destino
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        // Ordenamos la transferencia vertices
+        UpdateSubresources<1>(m_commandList.Get(), m_iBufferDefault.Get(), m_iBufferUpload.Get(), 0, 0, 1, &origen_indices_struct);
+        
+        // Cambio de estado en el recurso de destino
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_iBufferDefault.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
-    m_commandList->ResourceBarrier(1, &barrier);
+        m_commandList->ResourceBarrier(1, &barrier);
 
-
+        // The array of D3D12_SUBRESOURCE_DATA structures can deleted
+       
+    
     /* Tarea 3: Establecemos una vista para vértices e índices*/
     // Establecemos la vista (descriptor) para el buffer de vértices
     /* Vértices*/
 
-    m_vBufferView.BufferLocation = m_vBufferDefault->GetGPUVirtualAddress();
-    m_vBufferView.StrideInBytes = sizeof(Vertex);
-    m_vBufferView.SizeInBytes = mesh.GetVSize();
+        D3D12_GPU_VIRTUAL_ADDRESS vBufferStart = m_vBufferDefault->GetGPUVirtualAddress();
+        D3D12_GPU_VIRTUAL_ADDRESS iBufferStart = m_iBufferDefault->GetGPUVirtualAddress();
+        
+        m_vBufferView.BufferLocation = vBufferStart;
+        m_vBufferView.StrideInBytes = sizeof(Vertex);
+        m_vBufferView.SizeInBytes = 0;
+        m_iBufferView.BufferLocation = iBufferStart;
+        m_iBufferView.Format = DXGI_FORMAT_R32_UINT;
+        m_iBufferView.SizeInBytes = 0;
 
+        for (int indMesh=0; indMesh < numberOfMeshes; indMesh++) {
+            
+           
+            std::shared_ptr<Mesh> mesh = vMesh[indMesh];
 
+            
+            m_vBufferView.SizeInBytes += mesh->GetVSize();
 
-    D3D12_VERTEX_BUFFER_VIEW aVBufferView[1] = { m_vBufferView }; // Es necesario pasar un array de buffer views
+            m_iBufferView.SizeInBytes += mesh->GetISize();
 
-    m_commandList->IASetVertexBuffers(0, 1, aVBufferView);
+            
+        }
 
-    /* Índices*/
+        D3D12_VERTEX_BUFFER_VIEW aVBufferView[1] = { m_vBufferView };  // Es necesario pasar un array de buffer views
+        D3D12_INDEX_BUFFER_VIEW aIBufferView[1] = { m_iBufferView };
 
-    m_iBufferView.BufferLocation = m_iBufferDefault->GetGPUVirtualAddress();
-    m_iBufferView.Format = DXGI_FORMAT_R32_UINT;
-    m_iBufferView.SizeInBytes = mesh.GetISize();
+        m_commandList->IASetVertexBuffers(0, 1, aVBufferView);
+        m_commandList->IASetIndexBuffer(aIBufferView);
 
-    // Todo: Establecemos la vista para el buffer de indices
-
-    D3D12_INDEX_BUFFER_VIEW aIBufferView[1] = { m_iBufferView }; // Es necesario pasar un array de buffer views
-
-    m_commandList->IASetIndexBuffer(aIBufferView);
-
-    /* Tarea 4: Cargamos la textura de la malla*/
-
-    m_mesh.meshTexture = std::make_unique<Mesh::Texture>();
-    m_mesh.meshTexture->Name = "tutorialTex";
-    m_mesh.meshTexture->Filename = L"Assets/tutorialtextura.dds";
-    DX::ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(m_d3dDevice.Get(), m_commandList.Get(),
-        m_mesh.meshTexture->Filename.c_str(),
-        m_mesh.meshTexture->Resource,
-        m_mesh.meshTexture->UploadHeap));
+    
+    /* Tarea 4: Cargamos las texturas de la malla*/
+        unsigned int numTextures = GameStatics::TexFileNames.size();
+        m_textureDefault.resize(numTextures);
+        m_textureUpload.resize(numTextures);
+        for (auto it = GameStatics::TexFileNames.begin(); it != GameStatics::TexFileNames.end(); it++) {
+            auto texName = it->first;
+            auto fileName = it->second;
+            unsigned int texIdx = static_cast<unsigned int>(texName);
+            DX::ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(m_d3dDevice.Get(), m_commandList.Get(),
+                fileName.c_str(),
+                m_textureDefault[texIdx],
+                m_textureUpload[texIdx]));
+        }
         
     /*------------------------- Fin Objetivo 1  ----------------------------------------------------------------------------*/
 
+    // Creación de recursos para las constantes
 
+    // Constantes comunes
     unsigned int elementSizeConstants = CalcConstantBufferByteSize(sizeof(vConstants));
 
     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -812,9 +907,15 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
         );
     }
 
-    unsigned int elementSizeInstance = sizeof(vInstance);
+    // Constantes por objeto
+    
+    // Number of instances
+    unsigned int numberOfInstances = 0;
+    for (auto vinst : m_objects)
+        numberOfInstances += vinst.size();
+    unsigned int instanceBufferSize = CalcConstantBufferByteSize(sizeof(vInstance)*numberOfInstances);
     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(elementSizeInstance * objects.size());
+    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(instanceBufferSize);
     for (int i = 0; i < c_swapBufferCount; i++) {
         m_d3dDevice->CreateCommittedResource(
             &heapProperties,
@@ -826,10 +927,11 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
         );
     }
 
+
     /* Tarea 2: crear un heap de descriptores CBV_SRV_UAV*/
 
     D3D12_DESCRIPTOR_HEAP_DESC cHeapDescriptor;
-    cHeapDescriptor.NumDescriptors = 2*c_swapBufferCount+1; // (CBV(Pass) + SRV(Instance)) por swap buffer + textura
+    cHeapDescriptor.NumDescriptors = 2*c_swapBufferCount+numTextures; // (CBV(Pass) + SRV(Instance)) por swap buffer + num of textures
     cHeapDescriptor.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     cHeapDescriptor.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     cHeapDescriptor.NodeMask = 0;
@@ -854,12 +956,15 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
     
     
     for (int i = 0; i < c_swapBufferCount; i++) {
+        // View for buffer of common constants for all objects
         D3D12_GPU_VIRTUAL_ADDRESS cAddress = m_vConstantBuffer[i]->GetGPUVirtualAddress();
         D3D12_CONSTANT_BUFFER_VIEW_DESC cDescriptor;
         cDescriptor.BufferLocation = cAddress;
         cDescriptor.SizeInBytes = elementSizeConstants;
         m_d3dDevice->CreateConstantBufferView(&cDescriptor, hDescriptor);
         hDescriptor.Offset(1, m_cDescriptorSize);
+        // View for buffer of constants per instance
+        
         cAddress = m_vInstanceBuffer[i]->GetGPUVirtualAddress();
         D3D12_SHADER_RESOURCE_VIEW_DESC sBDesc = {};
         sBDesc = {};
@@ -867,7 +972,7 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
         sBDesc.Format = m_vInstanceBuffer[i].Get()->GetDesc().Format;
         sBDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         sBDesc.Buffer.FirstElement = 0;
-        sBDesc.Buffer.NumElements = objects.size();
+        sBDesc.Buffer.NumElements = numberOfInstances;
         sBDesc.Buffer.StructureByteStride = sizeof(vInstance);
         sBDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
         
@@ -875,19 +980,21 @@ void Game::CreateMainInputFlowResources(const Mesh& mesh) {
         hDescriptor.Offset(1, m_cDescriptorSize);
            
     }
-    /* Tarea 5 Creamos un descriptor SRV para la textura*/
-    // Obtenemos un handle para el descriptor.
+
+    /* Tarea 5 Creamos descriptores SRV para las texturas*/
     
     
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = m_mesh.meshTexture->Resource->GetDesc().Format;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MostDetailedMip = 0;
-    //srvDesc.Texture2D.MipLevels = m_mesh.meshTexture->Resource->GetDesc().MipLevels;
-    srvDesc.Texture2D.MipLevels = -1;
-    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-    m_d3dDevice->CreateShaderResourceView(m_mesh.meshTexture->Resource.Get(), &srvDesc, hDescriptor);
+    for (int i = 0; i < numTextures; i++) {
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = m_textureDefault[i]->GetDesc().Format;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.MipLevels = -1;
+        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+        m_d3dDevice->CreateShaderResourceView(m_textureDefault[i].Get(), &srvDesc, hDescriptor);
+        hDescriptor.Offset(1, m_cDescriptorSize);
+    }
 
     /* Tarea 6 Creamoes un descriptor para el sampler*/
     D3D12_SAMPLER_DESC samplerDesc = {};
@@ -992,14 +1099,25 @@ void Game::PSO()
 {
 
     // Input Layout
-
+    // 1. HLSL Semantics
+    // 2. Semantic Index.
+    // 3. DXGI Format.
+    // 4. Input Slot: IA Stage has 15 slots.
+    // 5. Offset in bytes from the begining of the vertex information.
+    // 6. Input class for this slot. There are two possibilites: each data unit represents a vertex of the same instance
+    // or each data unit represents  data for an instance.
+    // 7. Instance data step rate. Indicate how many instances have to be drawn befor advancing to the next data
+    // This parameter should be zero if we are in D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA
+    // Input data per instance is a way to have instance particular parameters when drawing multiple instances
+    //
 
     m_inputLayout = {
 
         {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"COLOR",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,12,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
     {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,28,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
-    {"UV",0,DXGI_FORMAT_R32G32_FLOAT,0,40,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
+    {"UV",0,DXGI_FORMAT_R32G32_FLOAT,0,40,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"MATINDEX",0,DXGI_FORMAT_R32_UINT,0,48,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
 
 
