@@ -317,6 +317,7 @@
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="Game.h" />
     <ClInclude Include="Error.h" />
+    <ClInclude Include="GameGeo.h" />
     <ClInclude Include="HelperFunctions.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="pch.h" />

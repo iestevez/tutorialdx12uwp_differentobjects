@@ -33,6 +33,7 @@
     <ClInclude Include="Error.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="GameGeo.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Logo.scale-200.png">

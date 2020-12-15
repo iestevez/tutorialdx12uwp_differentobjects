@@ -20,6 +20,7 @@ public:
 
     // Initialization and management
     void Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTATION rotation);
+    void InitializeObjects(const std::vector<int>& numberOfInstances, const std::vector<int>& matInd, const float r, const float minDistance, const float maxDistance);
 
     // Basic game loop
     void Tick();
@@ -40,8 +41,12 @@ private:
 
     size_t m_NumberOfMeshes;
 
+    const size_t c_NumberOfObjects = 5;
+    const size_t c_NumberOfInstancesPerObject = 3;
+
     // Per object particular information
     struct ObjectData {
+        bool                                                isInstanced;
         XMFLOAT4X4											matrixWorld;
         UINT                                                matind;
      };
@@ -75,21 +80,20 @@ private:
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>  m_textureUpload;
 
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
-    
-    
-   
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_cDescriptorHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_sDescriptorHeap; // Descriptor HEap de Samplers
-    unsigned int m_cDescriptorSize;
+    // Constants resources and descriptores related stuff
 
+    // Constants are "frame resources". We use as many frame resources as swap chain buffers.
+    static const UINT                                   c_swapBufferCount = 3;
+
+    // Pass constants
     struct vConstants {
 
         DirectX::XMFLOAT4X4 PassTransform = { 1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0 };
-       
+
 
     };
 
+    // Instance object constants
     struct vInstance {
 
         DirectX::XMFLOAT4X4 Transform = { 1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0 };
@@ -100,6 +104,26 @@ private:
         UINT Pad2;
 
     };
+
+    // Data:
+    vConstants                                                       m_vConstants[c_swapBufferCount];
+    std::vector<std::vector<vInstance>>                              m_vInstances[c_swapBufferCount]; // Vector of instances per object.
+
+    // One pass constant buffer per frame resource.
+    Microsoft::WRL::ComPtr<ID3D12Resource>				m_vConstantBuffer[c_swapBufferCount]; // Buffer de constantes
+    
+    // One instance constant buffer per object and frame resource.
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>				m_vInstanceBuffer[c_swapBufferCount]; // Buffer de constantes
+   
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_cDescriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_sDescriptorHeap; // Descriptor HEap de Samplers
+    unsigned int m_cDescriptorSize;
+
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
+
+
+
 
     
 
@@ -142,7 +166,7 @@ private:
 
     // Direct3D Objects
     D3D_FEATURE_LEVEL                                   m_featureLevel;
-    static const UINT                                   c_swapBufferCount = 3;
+    
     UINT                                                m_backBufferIndex;
     UINT                                                m_rtvDescriptorSize;
     Microsoft::WRL::ComPtr<ID3D12Device>                m_d3dDevice;
@@ -151,13 +175,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_rtvDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_dsvDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>      m_commandAllocators[c_swapBufferCount];
-    Microsoft::WRL::ComPtr<ID3D12Resource>				m_vConstantBuffer[c_swapBufferCount]; // Buffer de constantes
-    Microsoft::WRL::ComPtr<ID3D12Resource>				m_vInstanceBuffer[c_swapBufferCount]; // Buffer de constantes
+   
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>   m_commandList;
     Microsoft::WRL::ComPtr<ID3D12Fence>                 m_fence;
     UINT64                                              m_fenceValues[c_swapBufferCount];
-    vConstants                                          m_vConstants[c_swapBufferCount];
-    vInstance                                           m_vInstances[c_swapBufferCount];
+   
     Microsoft::WRL::Wrappers::Event                     m_fenceEvent;
 
     // Rendering resources

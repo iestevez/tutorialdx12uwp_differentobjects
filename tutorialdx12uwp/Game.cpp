@@ -4,6 +4,7 @@
 
 #include "pch.h"
 #include "Game.h"
+#include "GameGeo.h"
 
 extern void ExitGame();
 
@@ -25,6 +26,7 @@ Game::Game() noexcept :
 
 void Game::LoadMeshes() {
     m_NumberOfMeshes = GameStatics::ObjFileNames.size();
+    assert(m_NumberOfMeshes <= c_NumberOfObjects);
     m_meshes.resize(m_NumberOfMeshes);
     m_objects.resize(m_NumberOfMeshes);
 
@@ -36,6 +38,44 @@ void Game::LoadMeshes() {
      }
 }
 
+
+void Game::InitializeObjects(const std::vector<int> &ninstances, const std::vector<int> &matIndex, const float r, const float minDistance, const float maxDistance) {
+    assert(m_NumberOfMeshes <= c_NumberOfObjects);
+    
+    if (matIndex.size() != ninstances.size())
+        return;
+    m_objects.clear();
+    m_objects.resize(m_NumberOfMeshes);
+    
+    XMMATRIX projection =XMLoadFloat4x4(&m_projection);
+    XMMATRIX view = XMLoadFloat4x4(&m_view);
+    for (int i = 0; i < m_NumberOfMeshes; i++) {
+        int ninst;
+        if (i < size(ninstances))
+            ninst = ninstances[i];
+        else
+            ninst = 0;
+        
+        assert(ninst <= c_NumberOfInstancesPerObject);
+        
+        m_objects[i].clear();
+        m_objects[i].resize(ninst);
+        for (int j = 0; j < ninst;j++) {
+            
+            ObjectData &objectData=m_objects[i][j];
+            objectData.isInstanced = true;
+            objectData.matind = matIndex[i];
+
+            XMMATRIX tMat = Geo::GetRandomPointInsideFrustum(projection, view, r, minDistance, maxDistance);
+            XMMATRIX rMat = Geo::GetRandomRotationMatrix();
+            XMMATRIX world = rMat * tMat;
+            XMStoreFloat4x4(&objectData.matrixWorld,world);
+            
+        }
+
+    }
+
+}
 void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTATION rotation)
 {
     // Load Assets
@@ -45,25 +85,29 @@ void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTAT
     
 
     // Inicializamos matrices de transformación
+    float x = 0.0;
+    float y = 0.0;
+    float z = -10;
 
-    XMStoreFloat4x4(&m_view, XMMatrixIdentity());
-    XMStoreFloat4x4(&m_projection, XMMatrixIdentity());
+    // Recalculamos la matriz de vista
+    XMVECTOR location = XMVectorSet(x, y, z, 1.0f);
+    XMVECTOR target = XMVectorSet(0.0, 0.0, 1.0, 1.0f);
+    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMMATRIX view = XMMatrixLookAtLH(location, target, up);
+    float r = static_cast<float>(m_outputWidth / m_outputHeight);
+    XMMATRIX projection = XMMatrixPerspectiveFovLH(0.25 * XM_PI, r, 0.5f, 1000.0f);
+    XMStoreFloat4x4(&m_view, view);
+   
+    XMStoreFloat4x4(&m_projection, projection);
 
 
 
     // Inicializamos un par de objectos
-    ObjectData o;
-    std::vector<ObjectData> vobj;
-    for(auto objInstances : m_objects)
-        objInstances.clear();
-   
-    
-    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(0, 0, 0));
-    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE1)].push_back(o);
-    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(3, 0, 0));
-    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE2)].push_back(o);
-    XMStoreFloat4x4(&o.matrixWorld, XMMatrixTranslation(-3, 0, 0));
-    m_objects[static_cast<unsigned int>(GameStatics::ShapeName::SHAPE3)].push_back(o);
+    std::vector<int> ninstances = { 2,3 };
+    std::vector<int> materials = { 1,1 };
+    float minDistance = 10.0;
+    float maxDistance = 100.0;
+    InitializeObjects(ninstances, materials, r, minDistance,maxDistance);
 
     
     // Windows
@@ -121,44 +165,68 @@ void Game::Update(DX::StepTimer const& timer)
     delta += elapsedTime * (0.1 * XM_2PI);
     //void* data=nullptr;
 
-    // upload de las constantes
-    BYTE* data;
+    // Update data to be uploaded:
 
-    m_vConstantBuffer[m_backBufferIndex]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
-    auto elementSizeConstants= CalcConstantBufferByteSize(sizeof(vConstants));
+    // First, update of pass constants
     XMFLOAT4X4 passTransform;
     XMStoreFloat4x4(&passTransform, XMMatrixIdentity());
-    memcpy(data, reinterpret_cast<const void*>(&passTransform), sizeof(vConstants));
-    if (m_vConstantBuffer[m_backBufferIndex] != nullptr)
-        m_vConstantBuffer[m_backBufferIndex]->Unmap(0, nullptr);
 
-    // upload del buffer estructurado
-    m_vInstanceBuffer[m_backBufferIndex]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
-    auto elementSizeInstance = sizeof(vInstance);
-    UINT count = 0;
-    for (auto shape : m_objects) {
-        for (auto obj : shape) {
+    // Second, update of per object constants
+    m_vInstances[m_backBufferIndex].clear();
+    m_vInstances[m_backBufferIndex].resize(m_objects.size());
+
+    for (int i = 0; i < m_objects.size();i++) {
+        std::vector objInstances = m_objects[i];
+        m_vInstances[m_backBufferIndex][i].clear();
+        m_vInstances[m_backBufferIndex][i].resize(objInstances.size());
+        int count = 0;
+        for (auto &obj : objInstances) {
             XMMATRIX world = XMLoadFloat4x4(&obj.matrixWorld);
             XMMATRIX rotation = XMMatrixRotationX(delta);
             XMMATRIX translation = XMMatrixTranslation(0.0, 0.0, 0.0);
-            world = world * rotation * translation;
+            world = rotation * translation*world;
 
 
             XMMATRIX worldview = world * view;
             XMMATRIX transform = worldview * projection;
             XMMATRIX normaltransform = XMMatrixTranspose(XMMatrixInverse(nullptr, worldview));
-            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].NormalTransform, XMMatrixTranspose(normaltransform));
-            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex].Transform, XMMatrixTranspose(transform));
-            m_vInstances[m_backBufferIndex].MaterialIndex = obj.matind;
-            memcpy(&data[count * elementSizeInstance], reinterpret_cast<const void*>(&m_vInstances[m_backBufferIndex]), sizeof(vInstance)); //Copia de la transformación
-            ++count;
+            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex][i][count].NormalTransform, XMMatrixTranspose(normaltransform));
+            XMStoreFloat4x4(&m_vInstances[m_backBufferIndex][i][count].Transform, XMMatrixTranspose(transform));
+            m_vInstances[m_backBufferIndex][i][count].MaterialIndex = obj.matind;
+            count++;
+         
         }
+        
     }
 
-    
-    if (m_vInstanceBuffer[m_backBufferIndex] != nullptr)
-        m_vInstanceBuffer[m_backBufferIndex]->Unmap(0, nullptr);
+    // upload de las constantes
+    BYTE* data;
 
+    // First, upload of pass constants.
+    m_vConstantBuffer[m_backBufferIndex]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
+    //auto elementSizeConstants= CalcConstantBufferByteSize(sizeof(vConstants));
+    
+    memcpy(data, reinterpret_cast<const void*>(&passTransform), sizeof(vConstants));
+    if (m_vConstantBuffer[m_backBufferIndex] != nullptr)
+        m_vConstantBuffer[m_backBufferIndex]->Unmap(0, nullptr);
+
+    // upload del buffer estructurado
+    size_t elementSizeInstance = sizeof(vInstance);
+    for(int i=0;i<m_objects.size();i++){
+        int numberOfInstances = m_objects[i].size();
+        if (numberOfInstances > 0) {
+            m_vInstanceBuffer[m_backBufferIndex][i]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
+            //memcpy(&data[i * c_NumberOfInstancesPerObject * elementSizeInstance], reinterpret_cast<const void*>(m_vInstances[m_backBufferIndex][i].data()), numberOfInstances*elementSizeInstance); //Copia de la transformación
+            memcpy(data, reinterpret_cast<const void*>(&m_vInstances[m_backBufferIndex][i][0]), numberOfInstances * elementSizeInstance); //Copia de la transformación
+            if (m_vInstanceBuffer[m_backBufferIndex][i] != nullptr)
+                m_vInstanceBuffer[m_backBufferIndex][i]->Unmap(0, nullptr);
+        }
+       
+    }
+    
+
+    
+    
 
 
     elapsedTime;
@@ -194,15 +262,29 @@ void Game::Render()
     // Now Draw IndexedInstanced Data
     unsigned int indexStart = 0;
     unsigned int vertexStart = 0;
+
+    unsigned int startInDescriptorHeap = (1 + c_NumberOfObjects) * m_backBufferIndex;
+    CD3DX12_GPU_DESCRIPTOR_HANDLE cbHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    cbHandle.Offset(startInDescriptorHeap, m_cDescriptorSize);
+    m_commandList->SetGraphicsRootDescriptorTable(0, // para pass constant
+        cbHandle);
+
     for (int ishape = 0; ishape < m_meshes.size();ishape++) {
-        if (m_objects[ishape].size() > 0) {
-            
-            //Setting vertex and index buffers using the correct view
-           
-            // Drawing instances of the same shape.
-            m_commandList->DrawIndexedInstanced(m_meshes[ishape]->indices.size(), m_objects[ishape].size(), indexStart, vertexStart, 0);
+
+        if (m_objects[ishape].size() > 0) { // If there are instances
+
+
+            CD3DX12_GPU_DESCRIPTOR_HANDLE saHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            saHandle.Offset(startInDescriptorHeap + 1 + ishape, m_cDescriptorSize);
+            m_commandList->SetGraphicsRootDescriptorTable(1, // para instance constant
+                saHandle);
+
+            if (m_objects[ishape].size() > 0) {
+                m_commandList->DrawIndexedInstanced(m_meshes[ishape]->indices.size(), m_objects[ishape].size(), indexStart, vertexStart, 0);
+            }
 
         }
+        
         indexStart += m_meshes[ishape]->indices.size();
         vertexStart += m_meshes[ishape]->vertices.size();
     
@@ -255,7 +337,7 @@ void Game::Clear()
 
    
     CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    srvHandle.Offset(2*c_swapBufferCount, m_cDescriptorSize);
+    srvHandle.Offset((1+c_NumberOfObjects)*c_swapBufferCount, m_cDescriptorSize);
     m_commandList->SetGraphicsRootDescriptorTable(2, // para SRV Textura
         srvHandle);
 
@@ -874,6 +956,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
 
     
     /* Tarea 4: Cargamos las texturas de la malla*/
+        // Load textures in RT0, RT1, ....
         unsigned int numTextures = GameStatics::TexFileNames.size();
         m_textureDefault.resize(numTextures);
         m_textureUpload.resize(numTextures);
@@ -892,6 +975,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     // Creación de recursos para las constantes
 
     // Constantes comunes
+    // Pass constants: RC0, RC1, RC2
     unsigned int elementSizeConstants = CalcConstantBufferByteSize(sizeof(vConstants));
 
     heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -908,30 +992,41 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     }
 
     // Constantes por objeto
-    
+    // Resources for RS00, RS01, ..., RS10,RS11, ..., RS20, RS21,...
+    // RSij is buffer resource for frame resource i, and object j. 
+    // Each RSij is for object instances Oj0, Oj1, ... Ojn.
     // Number of instances
     unsigned int numberOfInstances = 0;
-    for (auto vinst : m_objects)
-        numberOfInstances += vinst.size();
-    unsigned int instanceBufferSize = CalcConstantBufferByteSize(sizeof(vInstance)*numberOfInstances);
-    heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(instanceBufferSize);
+    numberOfInstances = c_NumberOfInstancesPerObject;
     for (int i = 0; i < c_swapBufferCount; i++) {
-        m_d3dDevice->CreateCommittedResource(
-            &heapProperties,
-            D3D12_HEAP_FLAG_NONE,
-            &resourceDescription,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(m_vInstanceBuffer[i].GetAddressOf())
-        );
+        m_vInstanceBuffer[i].clear();
+        m_vInstanceBuffer[i].resize(c_NumberOfObjects);
+
+        for (int j = 0; j < c_NumberOfObjects; j++) {
+            unsigned int instanceBufferSize = CalcConstantBufferByteSize(sizeof(vInstance) * numberOfInstances);
+            //unsigned int instanceBufferSize = (sizeof(vInstance) * numberOfInstances);
+            heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+            resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(instanceBufferSize);
+
+            m_d3dDevice->CreateCommittedResource(
+                &heapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &resourceDescription,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(m_vInstanceBuffer[i][j].GetAddressOf())
+            );
+
+        }
+
     }
+   
 
 
     /* Tarea 2: crear un heap de descriptores CBV_SRV_UAV*/
 
     D3D12_DESCRIPTOR_HEAP_DESC cHeapDescriptor;
-    cHeapDescriptor.NumDescriptors = 2*c_swapBufferCount+numTextures; // (CBV(Pass) + SRV(Instance)) por swap buffer + num of textures
+    cHeapDescriptor.NumDescriptors = (1+c_NumberOfObjects)*c_swapBufferCount+numTextures; // (CBV(Pass) + (number of Objects)* SRV(Instance)) por swap buffer + num of textures
     cHeapDescriptor.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     cHeapDescriptor.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     cHeapDescriptor.NodeMask = 0;
@@ -947,7 +1042,8 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     DX::ThrowIfFailed(m_d3dDevice->CreateDescriptorHeap(&descHeapSampler, IID_PPV_ARGS(&m_sDescriptorHeap)));
 
 
-   
+   // Create views for CBV_SRV_UAV resources in the CBV_SRV_UAV Heap.
+
     CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(
         m_cDescriptorHeap->GetCPUDescriptorHandleForHeapStart()
     );
@@ -956,45 +1052,49 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     
     
     for (int i = 0; i < c_swapBufferCount; i++) {
-        // View for buffer of common constants for all objects
+        // View for buffer of common constants for all objects: DCiRCi
         D3D12_GPU_VIRTUAL_ADDRESS cAddress = m_vConstantBuffer[i]->GetGPUVirtualAddress();
         D3D12_CONSTANT_BUFFER_VIEW_DESC cDescriptor;
         cDescriptor.BufferLocation = cAddress;
         cDescriptor.SizeInBytes = elementSizeConstants;
         m_d3dDevice->CreateConstantBufferView(&cDescriptor, hDescriptor);
         hDescriptor.Offset(1, m_cDescriptorSize);
-        // View for buffer of constants per instance
         
-        cAddress = m_vInstanceBuffer[i]->GetGPUVirtualAddress();
-        D3D12_SHADER_RESOURCE_VIEW_DESC sBDesc = {};
-        sBDesc = {};
-        sBDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        sBDesc.Format = m_vInstanceBuffer[i].Get()->GetDesc().Format;
-        sBDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        sBDesc.Buffer.FirstElement = 0;
-        sBDesc.Buffer.NumElements = numberOfInstances;
-        sBDesc.Buffer.StructureByteStride = sizeof(vInstance);
-        sBDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
         
-        m_d3dDevice->CreateShaderResourceView(m_vInstanceBuffer[i].Get(),&sBDesc, hDescriptor);
-        hDescriptor.Offset(1, m_cDescriptorSize);
+        // Views for buffer of constants per object: DSiRSi0, DSiRSi1, ... (one view por object)
+        
+        for (int j = 0; j < m_vInstanceBuffer[i].size(); j++) {
+            cAddress = m_vInstanceBuffer[i][j]->GetGPUVirtualAddress();
+            D3D12_SHADER_RESOURCE_VIEW_DESC sBDesc = {};
+            sBDesc = {};
+            sBDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            sBDesc.Format = m_vInstanceBuffer[i][j].Get()->GetDesc().Format;
+            sBDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            sBDesc.Buffer.FirstElement = 0;
+            sBDesc.Buffer.NumElements = c_NumberOfInstancesPerObject;
+            sBDesc.Buffer.StructureByteStride = sizeof(vInstance);
+            sBDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+            m_d3dDevice->CreateShaderResourceView(m_vInstanceBuffer[i][j].Get(), &sBDesc, hDescriptor);
+            hDescriptor.Offset(1, m_cDescriptorSize);
+        }
            
     }
 
-    /* Tarea 5 Creamos descriptores SRV para las texturas*/
+        /* Tarea 5 Creamos descriptores SRV para las texturas*/
     
-    
-    for (int i = 0; i < numTextures; i++) {
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Format = m_textureDefault[i]->GetDesc().Format;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MostDetailedMip = 0;
-        srvDesc.Texture2D.MipLevels = -1;
-        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-        m_d3dDevice->CreateShaderResourceView(m_textureDefault[i].Get(), &srvDesc, hDescriptor);
-        hDescriptor.Offset(1, m_cDescriptorSize);
-    }
+        // Finally we create view for textures in the same CBV_SRV_UAV Descriptor Heap
+     for (int i = 0; i < numTextures; i++) {
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Format = m_textureDefault[i]->GetDesc().Format;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MostDetailedMip = 0;
+            srvDesc.Texture2D.MipLevels = -1;
+            srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+            m_d3dDevice->CreateShaderResourceView(m_textureDefault[i].Get(), &srvDesc, hDescriptor);
+            hDescriptor.Offset(1, m_cDescriptorSize);
+      }
 
     /* Tarea 6 Creamoes un descriptor para el sampler*/
     D3D12_SAMPLER_DESC samplerDesc = {};
