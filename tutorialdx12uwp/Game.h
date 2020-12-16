@@ -8,6 +8,7 @@
 #include "Mesh.h"
 #include "HelperFunctions.h"
 #include "DDSTextureLoader.h"
+#include "Controller.h"
 
 
 // A basic game implementation that creates a D3D12 device and
@@ -117,7 +118,7 @@ private:
    
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_cDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_sDescriptorHeap; // Descriptor HEap de Samplers
-    unsigned int m_cDescriptorSize;
+    UINT m_cDescriptorSize;
 
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
@@ -141,7 +142,10 @@ private:
     D3D12_GRAPHICS_PIPELINE_STATE_DESC		m_psoDescriptor;
     Microsoft::WRL::ComPtr<ID3D12PipelineState>		m_pso;
 
+    // Updates
     void Update(DX::StepTimer const& timer);
+    XMMATRIX UpdateView();
+
     void Render();
 
     void Clear();
@@ -189,6 +193,12 @@ private:
 
     // Game state
     DX::StepTimer                                       m_timer;
+
+    //Input
+    //Input
+    std::shared_ptr<Controller> m_controller;
+    XMVECTOR m_Position;
+    XMVECTOR m_LookDirection;
 };
 
 namespace GameStatics {

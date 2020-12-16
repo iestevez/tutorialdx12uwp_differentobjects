@@ -16,9 +16,9 @@ namespace Geo {
 		
 		XMMATRIX invView = XMMatrixInverse(nullptr, view);
 		XMMATRIX invProjection = XMMatrixInverse(nullptr, projection);
-		float x = disx(gen);
-		float y = disy(gen);
-		float z = disz(gen);
+		float x = static_cast<float>(disx(gen));
+		float y = static_cast<float>(disy(gen));
+		float z = static_cast<float>(disz(gen));
 		//x = 0.0f;
 		//y = 10.0f;
 		//z = 1.0f;
@@ -28,7 +28,7 @@ namespace Geo {
 		float B = mat._43;
 
 
-		XMVECTOR vndc_zcorrected = { x*z,y*z,A*z+B,z};
+		XMVECTOR vndc_zcorrected = { x*z,y*z,A*z+B,z}; //(NDCinv)
 		XMVECTOR vworld = XMVector4Transform(vndc_zcorrected, invProjection);
 		vworld = XMVector4Transform(vworld, invView);
 		return XMMatrixTranslation(XMVectorGetX(vworld), XMVectorGetY(vworld), XMVectorGetZ(vworld));
@@ -40,9 +40,9 @@ namespace Geo {
 		std::mt19937 gen(rd());
 		std::uniform_real_distribution<> disyawroll(0.0, XM_2PI);
 		std::uniform_real_distribution<> dispitch(-XM_PIDIV2, XM_PIDIV2);
-		float pitch = dispitch(gen);
-		float yaw = disyawroll(gen);
-		float roll = disyawroll(gen);
+		float pitch = static_cast<float>(dispitch(gen));
+		float yaw = static_cast<float>(disyawroll(gen));
+		float roll = static_cast<float>(disyawroll(gen));
 		return XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
 	}
 

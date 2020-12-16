@@ -20,8 +20,8 @@ public:
 	Mesh(std::string const fileName);
 	~Mesh();
 
-	UINT64 GetVSize() const;
-	UINT64 GetISize() const;
+	UINT GetVSize() const;
+	UINT GetISize() const;
 	void readFile(std::string const fileName);
 	void readObjFile(std::string const fileName);
 	std::vector<Vertex> vertices;
@@ -35,8 +35,8 @@ public:
 
 	std::unique_ptr<Texture> meshTexture;
 private:
-	UINT64 vsize;
-	UINT64 isize;
+	UINT vsize;
+	UINT isize;
 	XMFLOAT4 defaultColor;
 };
 

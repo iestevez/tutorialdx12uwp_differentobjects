@@ -16,6 +16,7 @@
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="HelperFunctions.cpp" />
     <ClCompile Include="DDSTextureLoader.cpp" />
+    <ClCompile Include="Controller.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Game.h" />
@@ -34,6 +35,7 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="GameGeo.h" />
+    <ClInclude Include="Controller.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Logo.scale-200.png">
@@ -98,6 +100,9 @@
       <Filter>Assets</Filter>
     </Media>
     <Media Include="Assets\mesh5.obj">
+      <Filter>Assets</Filter>
+    </Media>
+    <Media Include="Assets\mesh6.obj">
       <Filter>Assets</Filter>
     </Media>
   </ItemGroup>

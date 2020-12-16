@@ -37,12 +37,12 @@ Mesh::Mesh() : defaultColor (XMFLOAT4(Colors::White))
 
 	};
 
-	uint32_t sv = sizeof(Vertex);
-	uint32_t nvertices = vertices.size();
-	vsize = static_cast<UINT64>(nvertices * sv);
-	uint32_t sind = sizeof(unsigned int);
-	uint32_t nindices = indices.size();
-	isize = static_cast<UINT64>(nindices * sind);
+	size_t sv = sizeof(Vertex);
+	size_t nvertices = vertices.size();
+	vsize = static_cast<UINT>(nvertices * sv);
+	size_t sind = sizeof(unsigned int);
+	size_t nindices = indices.size();
+	isize = static_cast<UINT>(nindices * sind);
 	
 }
 
@@ -55,12 +55,12 @@ Mesh::Mesh(std::string const fileName) : defaultColor(XMFLOAT4(Colors::Coral)) {
 	catch (winrt::hresult_error &error) {
 		ShowWinRTError(error);
 	}
-	uint32_t sv = sizeof(Vertex);
-	uint32_t nvertices = vertices.size();
-	vsize = static_cast<UINT64>(nvertices * sv);
-	uint32_t sind = sizeof(unsigned int);
-	uint32_t nindices = indices.size();
-	isize = static_cast<UINT64>(nindices * sind);
+	size_t sv = sizeof(Vertex);
+	size_t nvertices = vertices.size();
+	vsize = static_cast<UINT>(nvertices * sv);
+	size_t sind = sizeof(unsigned int);
+	size_t nindices = indices.size();
+	isize = static_cast<UINT>(nindices * sind);
 }
 
 
@@ -68,11 +68,11 @@ Mesh::~Mesh()
 {
 }
 
-UINT64 Mesh::GetVSize() const {
+UINT Mesh::GetVSize() const {
 	return vsize;
 }
 
-UINT64 Mesh::GetISize() const {
+UINT Mesh::GetISize() const {
 	return isize;
 }
 
@@ -85,7 +85,7 @@ void Mesh::readFile(std::string const fileName) {
 	indices.clear();
 	file >> nvertices;
 	float vec[3]{};
-	for (auto i = 0; i < nvertices; i++) {
+	for (unsigned int i = 0; i < nvertices; i++) {
 		file >> vec[0] >> vec[1] >> vec[2];
 		Vertex v;
 		v.pos = XMFLOAT3(vec[0], vec[1], vec[2]);
@@ -94,26 +94,26 @@ void Mesh::readFile(std::string const fileName) {
 	}
 
 	auto cont = 0;
-	for (auto i = 0; i < nvertices; i++) {
+	for (unsigned int i = 0; i < nvertices; i++) {
 		file >> vec[0] >> vec[1] >> vec[2];
 		vertices[cont++].normal = XMFLOAT3(vec[0], vec[1], vec[2]);
 	}
 	
 	unsigned int nindices;
 	file >> nindices;
-	for (auto i = 0; i < nindices; i++) {
+	for (unsigned int i = 0; i < nindices; i++) {
 		unsigned int ind;
 		file >> ind;
 		indices.push_back(ind);
 	}
-	isize = indices.size()*sizeof(unsigned int);
-	for (auto i = 0; i < nvertices; i++) {
+	isize = static_cast<UINT>(indices.size()*sizeof(unsigned int));
+	for (unsigned int i = 0; i < nvertices; i++) {
 		float u, v;
 		file >> u >> v;
 		XMFLOAT2 uv = XMFLOAT2(u, v);
 		vertices[i].uvcoords = uv;
 	}
-	vsize = vertices.size() * sizeof(Vertex);
+	vsize = static_cast<UINT>(vertices.size() * sizeof(Vertex));
 	file.close();
 
 }

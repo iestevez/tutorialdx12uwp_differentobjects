@@ -16,9 +16,9 @@
 	{
 		std::ifstream inputstream(fn, std::ios::binary);
 		std::ios_base::iostate state = inputstream.rdstate();
-		bool isbad = inputstream.bad();
-		bool isgood = inputstream.good();
-		bool isfail = inputstream.fail();
+		//bool isbad = inputstream.bad();
+		//bool isgood = inputstream.good();
+		//bool isfail = inputstream.fail();
 		inputstream.seekg(0, std::ios::end);
 		std::ifstream::pos_type pos = inputstream.tellg();
 		vbytes.resize(pos);

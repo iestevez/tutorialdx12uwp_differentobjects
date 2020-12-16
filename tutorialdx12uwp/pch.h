@@ -54,6 +54,7 @@ namespace winrt::impl
 #include "winrt/Windows.UI.Core.h"
 #include "winrt/Windows.UI.Input.h"
 #include "winrt/Windows.UI.ViewManagement.h"
+#include "winrt/Windows.Devices.Input.h"
 
 namespace DX
 {

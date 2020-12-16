@@ -11,6 +11,7 @@ extern void ExitGame();
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
+using namespace winrt::Windows::UI::Core;
 
 Game::Game() noexcept :
     m_window(nullptr),
@@ -81,7 +82,8 @@ void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTAT
     // Load Assets
     LoadMeshes();
    
-    // Reserve space for all the objects
+    // Initialize Controller
+    m_controller = std::make_shared<Controller>(CoreWindow::GetForCurrentThread());
     
 
     // Inicializamos matrices de transformación
@@ -103,8 +105,8 @@ void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTAT
 
 
     // Inicializamos un par de objectos
-    std::vector<int> ninstances = { 2,3 };
-    std::vector<int> materials = { 1,1 };
+    std::vector<int> ninstances = { 2,3,3 };
+    std::vector<int> materials = { 1,1,1 };
     float minDistance = 10.0;
     float maxDistance = 100.0;
     InitializeObjects(ninstances, materials, r, minDistance,maxDistance);
@@ -149,20 +151,32 @@ void Game::Update(DX::StepTimer const& timer)
 
     // TODO: Actualización de las transformaciones en la escena
 
-    float x = 0.0;
-    float y = 0.0;
-    float z = -10;
+    //float x = 0.0;
+    //float y = 0.0;
+    //float z = -10;
+
+    m_controller->Update();
+
+    XMVECTOR velocity;
+    XMFLOAT3 fVelocity = m_controller->Velocity();
+    velocity = XMLoadFloat3(&fVelocity);
+    m_Position += velocity * elapsedTime;
+    XMFLOAT3 fLookDirection = m_controller->LookDirection();
+    m_LookDirection = XMLoadFloat3(&fLookDirection);
+    XMMATRIX view = UpdateView();
+
 
     // Recalculamos la matriz de vista
-    XMVECTOR location = XMVectorSet(x, y, z, 1.0f);
-    XMVECTOR target = XMVectorSet(0.0, 0.0, 1.0, 1.0f);
-    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    XMMATRIX view = XMMatrixLookAtLH(location, target, up);
-    XMMATRIX projection = XMMatrixPerspectiveFovLH(0.25 * XM_PI, m_outputWidth / m_outputHeight, 0.5f, 1000.0f);
+    //XMVECTOR location = XMVectorSet(x, y, z, 1.0f);
+    //XMVECTOR target = XMVectorSet(0.0, 0.0, 1.0, 1.0f);
+    //XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    //XMMATRIX view = XMMatrixLookAtLH(location, target, up);
+    float r = static_cast<float>(m_outputWidth / m_outputHeight);
+    XMMATRIX projection = XMMatrixPerspectiveFovLH(0.25 * XM_PI, r, 0.5f, 1000.0f);
     XMStoreFloat4x4(&m_view, view);
 
     static float delta = 0.0;
-    delta += elapsedTime * (0.1 * XM_2PI);
+    delta += static_cast<float>(elapsedTime * (0.1 * XM_2PI));
     //void* data=nullptr;
 
     // Update data to be uploaded:
@@ -213,7 +227,7 @@ void Game::Update(DX::StepTimer const& timer)
     // upload del buffer estructurado
     size_t elementSizeInstance = sizeof(vInstance);
     for(int i=0;i<m_objects.size();i++){
-        int numberOfInstances = m_objects[i].size();
+        size_t numberOfInstances = m_objects[i].size();
         if (numberOfInstances > 0) {
             m_vInstanceBuffer[m_backBufferIndex][i]->Map(0, nullptr, reinterpret_cast<void**>(&data)); // realizamos el mapeo
             //memcpy(&data[i * c_NumberOfInstancesPerObject * elementSizeInstance], reinterpret_cast<const void*>(m_vInstances[m_backBufferIndex][i].data()), numberOfInstances*elementSizeInstance); //Copia de la transformación
@@ -232,6 +246,16 @@ void Game::Update(DX::StepTimer const& timer)
     elapsedTime;
 }
 
+XMMATRIX Game::UpdateView() {
+
+    XMVECTOR location = m_Position;
+    XMVECTOR target = location + m_LookDirection;
+    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMMATRIX view = XMMatrixLookAtLH(location, target, up);
+    XMStoreFloat4x4(&m_view, view);
+    return view;
+
+}
 
 void Game::Render()
 {
@@ -260,17 +284,19 @@ void Game::Render()
     m_commandList->IASetIndexBuffer(iView);
     //--------------------------------------------------------------------------------------
     // Now Draw IndexedInstanced Data
-    unsigned int indexStart = 0;
-    unsigned int vertexStart = 0;
+    UINT indexStart = 0;
+    UINT vertexStart = 0;
 
-    unsigned int startInDescriptorHeap = (1 + c_NumberOfObjects) * m_backBufferIndex;
+    UINT startInDescriptorHeap = static_cast<UINT>((1 + c_NumberOfObjects) * m_backBufferIndex);
     CD3DX12_GPU_DESCRIPTOR_HANDLE cbHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     cbHandle.Offset(startInDescriptorHeap, m_cDescriptorSize);
     m_commandList->SetGraphicsRootDescriptorTable(0, // para pass constant
         cbHandle);
 
     for (int ishape = 0; ishape < m_meshes.size();ishape++) {
-
+        UINT numberOfIndex = static_cast<UINT>(m_meshes[ishape]->indices.size());
+        UINT numberOfInstances = static_cast<UINT>(m_objects[ishape].size());
+        UINT numberOfVertices = static_cast<UINT>(m_meshes[ishape]->vertices.size());
         if (m_objects[ishape].size() > 0) { // If there are instances
 
 
@@ -279,14 +305,17 @@ void Game::Render()
             m_commandList->SetGraphicsRootDescriptorTable(1, // para instance constant
                 saHandle);
 
+            //TODO: reconexión de las texturas por objeto
+
             if (m_objects[ishape].size() > 0) {
-                m_commandList->DrawIndexedInstanced(m_meshes[ishape]->indices.size(), m_objects[ishape].size(), indexStart, vertexStart, 0);
+                m_commandList->DrawIndexedInstanced(numberOfIndex, 
+                    numberOfInstances, indexStart, vertexStart, 0);
             }
 
         }
         
-        indexStart += m_meshes[ishape]->indices.size();
-        vertexStart += m_meshes[ishape]->vertices.size();
+        indexStart += numberOfIndex ;
+        vertexStart += numberOfVertices;
     
     
     }
@@ -337,7 +366,7 @@ void Game::Clear()
 
    
     CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(m_cDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    srvHandle.Offset((1+c_NumberOfObjects)*c_swapBufferCount, m_cDescriptorSize);
+    srvHandle.Offset((1+static_cast<UINT>(c_NumberOfObjects))*c_swapBufferCount, m_cDescriptorSize);
     m_commandList->SetGraphicsRootDescriptorTable(2, // para SRV Textura
         srvHandle);
 
@@ -803,7 +832,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
 
     */
 
-    unsigned int numberOfMeshes = vMesh.size();
+    size_t numberOfMeshes = vMesh.size();
 
     /*Tarea 1: Creación de los buffers.*/
     D3D12_HEAP_PROPERTIES heapProperties;
@@ -957,7 +986,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     
     /* Tarea 4: Cargamos las texturas de la malla*/
         // Load textures in RT0, RT1, ....
-        unsigned int numTextures = GameStatics::TexFileNames.size();
+        size_t numTextures = GameStatics::TexFileNames.size();
         m_textureDefault.resize(numTextures);
         m_textureUpload.resize(numTextures);
         for (auto it = GameStatics::TexFileNames.begin(); it != GameStatics::TexFileNames.end(); it++) {
@@ -996,14 +1025,15 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     // RSij is buffer resource for frame resource i, and object j. 
     // Each RSij is for object instances Oj0, Oj1, ... Ojn.
     // Number of instances
-    unsigned int numberOfInstances = 0;
+    size_t numberOfInstances = 0;
     numberOfInstances = c_NumberOfInstancesPerObject;
     for (int i = 0; i < c_swapBufferCount; i++) {
         m_vInstanceBuffer[i].clear();
         m_vInstanceBuffer[i].resize(c_NumberOfObjects);
 
         for (int j = 0; j < c_NumberOfObjects; j++) {
-            unsigned int instanceBufferSize = CalcConstantBufferByteSize(sizeof(vInstance) * numberOfInstances);
+            unsigned int instanceBufferSize = CalcConstantBufferByteSize(
+                static_cast<unsigned int>(sizeof(vInstance) * numberOfInstances));
             //unsigned int instanceBufferSize = (sizeof(vInstance) * numberOfInstances);
             heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
             resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(instanceBufferSize);
@@ -1026,7 +1056,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     /* Tarea 2: crear un heap de descriptores CBV_SRV_UAV*/
 
     D3D12_DESCRIPTOR_HEAP_DESC cHeapDescriptor;
-    cHeapDescriptor.NumDescriptors = (1+c_NumberOfObjects)*c_swapBufferCount+numTextures; // (CBV(Pass) + (number of Objects)* SRV(Instance)) por swap buffer + num of textures
+    cHeapDescriptor.NumDescriptors = static_cast<UINT>((1+c_NumberOfObjects)*c_swapBufferCount+numTextures); // (CBV(Pass) + (number of Objects)* SRV(Instance)) por swap buffer + num of textures
     cHeapDescriptor.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     cHeapDescriptor.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     cHeapDescriptor.NodeMask = 0;
@@ -1071,7 +1101,7 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
             sBDesc.Format = m_vInstanceBuffer[i][j].Get()->GetDesc().Format;
             sBDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
             sBDesc.Buffer.FirstElement = 0;
-            sBDesc.Buffer.NumElements = c_NumberOfInstancesPerObject;
+            sBDesc.Buffer.NumElements = static_cast<UINT>(c_NumberOfInstancesPerObject);
             sBDesc.Buffer.StructureByteStride = sizeof(vInstance);
             sBDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
