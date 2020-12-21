@@ -151,8 +151,11 @@ protected:
 
         int w, h;
         m_game->GetDefaultSize(w, h);
-
-        m_DPI = DisplayInformation::GetForCurrentView().LogicalDpi();
+        
+        float dpix, dpiy;
+        dpix = DisplayInformation::GetForCurrentView().RawDpiX();
+        dpiy = DisplayInformation::GetForCurrentView().RawDpiY();
+        m_game->SetDPI(dpix, dpiy);
 
         ApplicationView::PreferredLaunchWindowingMode(ApplicationViewWindowingMode::PreferredLaunchViewSize);
         // Change to ApplicationViewWindowingMode::FullScreen to default to full screen

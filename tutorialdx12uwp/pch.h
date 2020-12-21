@@ -21,6 +21,10 @@
 #include <DirectXColors.h>
 #include <d3dcompiler.h>
 
+#include <d2d1_3.h>
+#include <dwrite.h>
+#include <d3d11on12.h>
+
 // Helper DirectX12
 #include "d3dx12.h"
 

@@ -37,13 +37,23 @@ public:
     // Properties
     void GetDefaultSize( int& width, int& height ) const;
     void LoadMeshes();
+    void RenderUI();
+    void SetDPI(float x, float y);
 
 private:
 
+    //DPI for Direct2 rendering
+    struct dpi {
+        float xdpi;
+        float ydpi;
+    } m_dpi;
+    
     size_t m_NumberOfMeshes;
 
     const size_t c_NumberOfObjects = 5;
     const size_t c_NumberOfInstancesPerObject = 3;
+
+
 
     // Per object particular information
     struct ObjectData {
@@ -168,7 +178,7 @@ private:
     int                                                 m_outputHeight;
     DXGI_MODE_ROTATION                                  m_outputRotation;
 
-    // Direct3D Objects
+    // Direct3D12 Objects
     D3D_FEATURE_LEVEL                                   m_featureLevel;
     
     UINT                                                m_backBufferIndex;
@@ -179,17 +189,39 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_rtvDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_dsvDescriptorHeap;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>      m_commandAllocators[c_swapBufferCount];
-   
+
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>   m_commandList;
     Microsoft::WRL::ComPtr<ID3D12Fence>                 m_fence;
     UINT64                                              m_fenceValues[c_swapBufferCount];
-   
+
     Microsoft::WRL::Wrappers::Event                     m_fenceEvent;
+
+
+    // D3D1211ON12 objects
+    Microsoft::WRL::ComPtr<ID3D11Device>                m_d3d11Device;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
+    Microsoft::WRL::ComPtr<ID3D11On12Device1> m_d3d11On12Device;
+    Microsoft::WRL::ComPtr<IDWriteFactory> m_dWriteFactory;
+    Microsoft::WRL::ComPtr<ID2D1Factory3> m_d2dFactory;
+    Microsoft::WRL::ComPtr<ID2D1Device2> m_d2dDevice;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext2> m_d2dDeviceContext;
+
+   
 
     // Rendering resources
     Microsoft::WRL::ComPtr<IDXGISwapChain3>             m_swapChain;
     Microsoft::WRL::ComPtr<ID3D12Resource>              m_renderTargets[c_swapBufferCount];
     Microsoft::WRL::ComPtr<ID3D12Resource>              m_depthStencil;
+
+    // Rendering resources for D3D1211ON12 and Direct2D
+    Microsoft::WRL::ComPtr<ID3D11Resource> m_wrappedBackBuffers[c_swapBufferCount];
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> m_d2dRenderTargets[c_swapBufferCount];
+
+    // App Resouces
+
+    // App Resources for Direct2D and DirectWrite
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_textBrush;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> m_textFormat;
 
     // Game state
     DX::StepTimer                                       m_timer;
