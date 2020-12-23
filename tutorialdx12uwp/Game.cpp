@@ -22,7 +22,8 @@ Game::Game() noexcept :
     m_featureLevel(D3D_FEATURE_LEVEL_11_0),
     m_backBufferIndex(0),
     m_rtvDescriptorSize(0),
-    m_fenceValues{}
+    m_fenceValues{},
+    m_score(0)
 {
 }
 
@@ -321,17 +322,18 @@ void Game::Render()
     
     }
 
+    // Transition the render target to the state that allows it to be presented to the display.
+    //D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_backBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    //m_commandList->ResourceBarrier(1, &barrier);
     // Send the command list off to the GPU for processing.
     DX::ThrowIfFailed(m_commandList->Close());
     m_commandQueue->ExecuteCommandLists(1, CommandListCast(m_commandList.GetAddressOf()));
     // Now RenderUI
     RenderUI();
-    //m_d3d11DeviceContext->Flush(); // comming back to d3d12 requires flush
-    // Show the new frame.
-     // Transition the render target to the state that allows it to be presented to the display.
-    //D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_backBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    //m_commandList->ResourceBarrier(1, &barrier);
+    m_d3d11DeviceContext->Flush(); // comming back to d3d12 requires flush
     
+     // Show the new frame.
+     
    
     Present();
 }
@@ -609,7 +611,7 @@ void Game::CreateDevice()
 
     // D3D1211OND312 // From samples developed by Microsoft
     UINT dxgiFactoryFlags = 0;
-    UINT d3d11DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    UINT d3d11DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG;
     D2D1_FACTORY_OPTIONS d2dFactoryOptions = {};
 
     // Create an 11 device wrapped around the 12 device and share
@@ -628,9 +630,14 @@ void Game::CreateDevice()
         nullptr
     ));
 
+    
     // Query the 11On12 device from the 11 device.
     DX::ThrowIfFailed(m_d3d11Device.As(&m_d3d11On12Device));
 
+    ComPtr<ID3D11Debug> debugDevice;
+    HRESULT h = m_d3d11Device->QueryInterface<ID3D11Debug>(debugDevice.GetAddressOf());
+    
+    
     // Create D2D/DWrite components.
     {
         D2D1_DEVICE_CONTEXT_OPTIONS deviceOptions = D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
@@ -641,6 +648,25 @@ void Game::CreateDevice()
         DX::ThrowIfFailed(m_d2dDevice->CreateDeviceContext(deviceOptions, &m_d2dDeviceContext));
         DX::ThrowIfFailed(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), &m_dWriteFactory));
     }
+    
+    // WIC for Sprite loading
+    // We need a factory of Window Image Component (it is a COM).
+    DX::ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory2, 
+        NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(m_WICFactory.GetAddressOf())));
+    LPCWSTR fileName = (GameStatics::BitmapFileNames[GameStatics::BitmapName::BMP1]).c_str();
+    DX::ThrowIfFailed(m_WICFactory->CreateDecoderFromFilename(fileName, 
+        NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, m_bitmapDecoder.GetAddressOf()));
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+    DX::ThrowIfFailed(m_bitmapDecoder->GetFrame(0, frame.GetAddressOf()));
+     
+
+    DX::ThrowIfFailed(m_WICFactory->CreateFormatConverter(m_formatConverter.GetAddressOf()));
+    DX::ThrowIfFailed(m_formatConverter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, NULL, 0, WICBitmapPaletteTypeCustom));
+
+    DX::ThrowIfFailed(m_d2dDeviceContext->CreateBitmapFromWicBitmap(m_formatConverter.Get(),
+        m_crossBitmap.ReleaseAndGetAddressOf()));
+       
+       
 
 }
 
@@ -655,31 +681,42 @@ void Game::CreateResources()
     unsigned int cD2DRenderTargets=0;
     unsigned int cRenderTargets = 0;
    
-       
-
-    if(m_d3d11DeviceContext)
-        m_d3d11DeviceContext->ClearState();
-
-    for (UINT n = 0; n < c_swapBufferCount; n++)
-    {
-        //Microsoft::WRL::ComPtr<IDXGISurface> surface;
-        //DX::ThrowIfFailed(m_wrappedBackBuffers[n].As(&surface));
-        //m_wrappedBackBuffers[n].Get()->Release();
-        cWrappedBuffers= m_wrappedBackBuffers[n].Reset();
-        cRenderTargets = m_renderTargets[n].Reset();
-       
+    DebugLiveObjects();
+    for (UINT n = 0; n < c_swapBufferCount; n++) {
+        m_renderTargets[n].Reset();
+        if (m_d2dRenderTargets[n])
+            m_d2dRenderTargets[n].Reset();
+        if (m_wrappedBackBuffers[n])
+            m_wrappedBackBuffers[n].Reset();
         m_fenceValues[n] = m_fenceValues[m_backBufferIndex];
     }
+    if (m_d2dDeviceContext) {
+        m_d2dDeviceContext->SetTarget(nullptr);
+        m_d3d11DeviceContext->Flush();
+    }
+    m_d3d11DeviceContext->Flush(); // Even for reset of wrapped buffers this is required
+    DebugLiveObjects();
+
+    
+    
+    
+    //DebugLiveObjects();
+
+    
+
+    //DebugLiveObjects();
     
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
     UINT backBufferWidth = static_cast<UINT>(m_outputWidth);
     UINT backBufferHeight = static_cast<UINT>(m_outputHeight);
-
+    
     
     if (m_swapChain)
     {
-        
+        // Debug live objects
+       
+
         HRESULT hr = m_swapChain->ResizeBuffers(c_swapBufferCount, backBufferWidth, backBufferHeight, backBufferFormat, 0);
 
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
@@ -736,6 +773,7 @@ void Game::CreateResources()
         swprintf_s(name, L"Render target %u", n);
         m_renderTargets[n]->SetName(name);
 
+
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvDescriptor(
             m_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
             static_cast<INT>(n), m_rtvDescriptorSize);
@@ -748,10 +786,9 @@ void Game::CreateResources()
             // ReleaseWrappedResources() is called on the 11On12 device, the resource 
             // will be transitioned to the PRESENT state.
         
-            unsigned int count = 0;
-            m_renderTargets[n].Get()->AddRef();
-            count = m_renderTargets[n].Get()->Release();
+        //DebugLiveObjects();
             D3D11_RESOURCE_FLAGS d3d11Flags = { D3D11_BIND_RENDER_TARGET };
+            //D3D11_RESOURCE_FLAGS d3d11Flags = {};
             DX::ThrowIfFailed(m_d3d11On12Device->CreateWrappedResource(
                 m_renderTargets[n].Get(),
                 &d3d11Flags,
@@ -759,13 +796,11 @@ void Game::CreateResources()
                 D3D12_RESOURCE_STATE_PRESENT,
                 IID_PPV_ARGS(m_wrappedBackBuffers[n].GetAddressOf())
             ));
-            m_renderTargets[n].Get()->AddRef();
-            count = m_renderTargets[n].Get()->Release();
-
-        
+            
        
 
         // Create a render target for D2D to draw directly to this back buffer.
+        
         
         float ldpi = winrt::Windows::Graphics::Display::DisplayInformation::GetForCurrentView().LogicalDpi();
         D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
@@ -784,6 +819,8 @@ void Game::CreateResources()
             &bitmapProperties,
             &m_d2dRenderTargets[n]
         ));
+
+        
         
 
     }
@@ -1315,23 +1352,24 @@ void Game::CreateMainInputFlowResources(const std::vector<std::shared_ptr<Mesh>>
     DX::ThrowIfFailed(m_fence->SetEventOnCompletion(1, m_fenceEvent.Get()));
     WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, FALSE);
 
-
+    
     // Create D2D/DWrite objects for rendering text.
     {
-        DX::ThrowIfFailed(m_d2dDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &m_textBrush));
+        DX::ThrowIfFailed(m_d2dDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &m_textBrush));
         DX::ThrowIfFailed(m_dWriteFactory->CreateTextFormat(
             L"Verdana",
             NULL,
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            50,
+            32,
             L"en-us",
             &m_textFormat
         ));
-        DX::ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-        DX::ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+        DX::ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+        DX::ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
     }
+    
 
 }
 
@@ -1413,10 +1451,12 @@ void Game::PSO()
 void Game::RenderUI()
 {
     D2D1_SIZE_F rtSize = m_d2dRenderTargets[m_backBufferIndex]->GetSize();
+    
     D2D1_RECT_F textRect = D2D1::RectF(0, 0, rtSize.width, rtSize.height);
-    //D2D1_RECT_F textRect = D2D1::RectF(0, 0, 1200, 900);
-    static const WCHAR text[] = L"11On12";
-
+   
+    wchar_t text[100];
+    size_t lenText = swprintf_s(text,100,L"Score: %d",m_score);
+    
     // Acquire our wrapped render target resource for the current back buffer.
     m_d3d11On12Device->AcquireWrappedResources(m_wrappedBackBuffers[m_backBufferIndex].GetAddressOf(), 1);
 
@@ -1424,13 +1464,36 @@ void Game::RenderUI()
     m_d2dDeviceContext->SetTarget(m_d2dRenderTargets[m_backBufferIndex].Get());
     m_d2dDeviceContext->BeginDraw();
     m_d2dDeviceContext->SetTransform(D2D1::Matrix3x2F::Identity());
-    m_d2dDeviceContext->DrawText(
-        text,
-        _countof(text) - 1,
-        m_textFormat.Get(),
-        &textRect,
-        m_textBrush.Get()
-    );
+     
+    if (lenText > 0) {
+        m_d2dDeviceContext->DrawText(
+            text,
+            lenText ,
+            m_textFormat.Get(),
+            &textRect,
+            m_textBrush.Get()
+        );
+    }
+    // Drawing a sprite from a ID2D1Bitmap
+    
+    // Defining destination rectangle
+    float crossSize = 96.0f / 2.0f;; // 0.5inch size (DIC: units are 1/96 inch)
+    float cX1 = (rtSize.width - crossSize) / 2.0f ;
+    float cY1 = (rtSize.height - crossSize) / 2.0f;
+    float cX2 = cX1 + crossSize;
+    float cY2 = cY1 + crossSize;
+    D2D1_RECT_F crossRect = D2D1::RectF(cX1,cY1,cX2,cY2);
+    m_d2dDeviceContext->SetTransform(D2D1::Matrix3x2F::Identity());
+    m_d2dDeviceContext->DrawBitmap(m_crossBitmap.Get(), 
+        &crossRect, 
+        1.0f, 
+        D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+        NULL);
+
+
+
+
+
     DX::ThrowIfFailed(m_d2dDeviceContext->EndDraw());
 
     // Release our wrapped render target resource. Releasing 

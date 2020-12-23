@@ -3,3 +3,4 @@
 
 unsigned  int CalcConstantBufferByteSize(unsigned int bytesize);
 void readfile(char const* fn, std::vector<char> &vbytes);
+void DebugLiveObjects();

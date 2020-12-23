@@ -11,6 +11,8 @@
 #include "Controller.h"
 
 
+#pragma comment (lib, "Windowscodecs.lib")
+
 // A basic game implementation that creates a D3D12 device and
 // provides a game loop.
 class Game
@@ -37,6 +39,7 @@ public:
     // Properties
     void GetDefaultSize( int& width, int& height ) const;
     void LoadMeshes();
+    void LoadSprites();
     void RenderUI();
     void SetDPI(float x, float y);
 
@@ -223,6 +226,15 @@ private:
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_textBrush;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> m_textFormat;
 
+    // Sprites related stuff
+    // Use the Windows Imaging Component.
+    Microsoft::WRL::ComPtr<IWICImagingFactory2> m_WICFactory;
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> m_bitmapDecoder;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> m_formatConverter;
+    // Pointer
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> m_crossBitmap;
+    
+    
     // Game state
     DX::StepTimer                                       m_timer;
 
@@ -231,6 +243,9 @@ private:
     std::shared_ptr<Controller> m_controller;
     XMVECTOR m_Position;
     XMVECTOR m_LookDirection;
+
+    // Game state
+    UINT m_score;
 };
 
 namespace GameStatics {
@@ -253,6 +268,15 @@ namespace GameStatics {
         {TexName::TEX3,L"Assets/tex3.dds"},
         {TexName::TEX4,L"Assets/tex4.dds"},
         {TexName::TEX5,L"Assets/tex5.dds"}
+    };
+
+    enum class BitmapName {BMP1=0,BMP2=1,BMP3=2,BMP4=3,BMP5=4 };
+    static std::map<BitmapName, std::wstring> BitmapFileNames = {
+        {BitmapName::BMP1,L"Assets/sprite1.png"},
+        {BitmapName::BMP2,L"Assets/sprite2.png"},
+        {BitmapName::BMP3,L"Assets/sprite3.png"},
+        {BitmapName::BMP4,L"Assets/sprite4.png"},
+        {BitmapName::BMP5,L"Assets/sprite5.png"}
     };
 
 }

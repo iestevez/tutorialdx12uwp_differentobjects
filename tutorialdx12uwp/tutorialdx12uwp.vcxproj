@@ -354,6 +354,7 @@
     <None Include="tutorialdx12uwp_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Assets\sprite1.png" />
     <Image Include="Assets\tex1.dds" />
     <Image Include="Assets\tex2.dds" />
     <Image Include="Assets\tex3.dds" />

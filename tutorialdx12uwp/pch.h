@@ -60,6 +60,9 @@ namespace winrt::impl
 #include "winrt/Windows.UI.ViewManagement.h"
 #include "winrt/Windows.Devices.Input.h"
 
+// Windows Imaging Component (WIC) to load sprites
+#include "wincodec.h"
+
 namespace DX
 {
     inline void ThrowIfFailed(HRESULT hr)
