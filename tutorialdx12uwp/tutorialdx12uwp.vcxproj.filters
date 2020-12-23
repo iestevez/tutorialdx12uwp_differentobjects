@@ -36,6 +36,9 @@
     </ClInclude>
     <ClInclude Include="GameGeo.h" />
     <ClInclude Include="Controller.h" />
+    <ClInclude Include="d3dx12_18362.h">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Logo.scale-200.png">

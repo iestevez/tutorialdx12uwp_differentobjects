@@ -315,6 +315,7 @@
   <ItemGroup>
     <ClInclude Include="Controller.h" />
     <ClInclude Include="d3dx12.h" />
+    <ClInclude Include="d3dx12_18362.h" />
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="Game.h" />
     <ClInclude Include="Error.h" />

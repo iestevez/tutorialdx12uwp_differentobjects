@@ -4,7 +4,9 @@
 //
 
 #pragma once
-//#include "windows.h" //OutputDebugString
+//Comment the following define for previous versions of SDK to 1941, for example SDK18362
+#define _SDK19041
+
 #define MYTRACE OutputDebugString
 
 
@@ -14,7 +16,7 @@
 #include <wrl/client.h>
 #include <wrl/event.h>
 
-// Cabeceras DirectX 12
+// Headers DirectX 12
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <DirectXMath.h>
@@ -26,7 +28,13 @@
 #include <d3d11on12.h>
 
 // Helper DirectX12
+#ifndef _SDK19041
+#include "d3dx12_18362.h"
+#endif // !_SDK1941
+
+#ifdef _SDK19041
 #include "d3dx12.h"
+#endif
 
 
 // Cabeceras de la C++ STL
