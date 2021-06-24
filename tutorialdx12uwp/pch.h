@@ -71,6 +71,8 @@ namespace winrt::impl
 // Windows Imaging Component (WIC) to load sprites
 #include "wincodec.h"
 
+#include "windows.h"
+
 namespace DX
 {
     inline void ThrowIfFailed(HRESULT hr)

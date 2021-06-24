@@ -9,26 +9,24 @@ namespace Geo {
 	XMMATRIX GetRandomPointInsideFrustum(const XMMATRIX  &projection, const XMMATRIX &view, const float r, const float minDistance, const float  maxDistance) {
 		std::random_device rd;
 		std::mt19937 gen(rd());
-		std::uniform_real_distribution<> disx(-r, r);
-		std::uniform_real_distribution<> disy(-1.0, 1.0);
+		std::uniform_real_distribution<> disxy(-1.0, 1.0);
 		std::uniform_real_distribution<> disz(minDistance, maxDistance);
 
 		
 		XMMATRIX invView = XMMatrixInverse(nullptr, view);
 		XMMATRIX invProjection = XMMatrixInverse(nullptr, projection);
-		float x = static_cast<float>(disx(gen));
-		float y = static_cast<float>(disy(gen));
-		float z = static_cast<float>(disz(gen));
-		//x = 0.0f;
-		//y = 10.0f;
-		//z = 1.0f;
+		float xndc = static_cast<float>(disxy(gen));
+		float yndc = static_cast<float>(disxy(gen));
+		float zview = static_cast<float>(disz(gen));
+		
 		XMFLOAT4X4 mat;
 		XMStoreFloat4x4(&mat,projection);
 		float A = mat._33;
 		float B = mat._43;
+		float zndc = A + (B / zview);
 
 
-		XMVECTOR vndc_zcorrected = { x*z,y*z,A*z+B,z}; //(NDCinv)
+		XMVECTOR vndc_zcorrected = { xndc*zview,yndc*zview,zndc*zview,zview}; //(NDCinv)
 		XMVECTOR vworld = XMVector4Transform(vndc_zcorrected, invProjection);
 		vworld = XMVector4Transform(vworld, invView);
 		return XMMatrixTranslation(XMVectorGetX(vworld), XMVectorGetY(vworld), XMVectorGetZ(vworld));

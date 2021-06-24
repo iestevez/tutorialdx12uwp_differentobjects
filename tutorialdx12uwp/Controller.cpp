@@ -44,7 +44,7 @@ void Controller::OnMouseClicked(winrt::Windows::UI::Core::CoreWindow const& send
 	if (properties.IsLeftButtonPressed())
 		m_leftClicked = true;
 
-
+	OutputDebugString(L"Mouse Clicked!\n");
 }
 
 void Controller::OnMouseButtonReleased(winrt::Windows::UI::Core::CoreWindow const& /*sender*/,

@@ -65,6 +65,7 @@ void Game::InitializeObjects(const std::vector<int> &ninstances, const std::vect
         m_objects[i].resize(ninst);
         for (int j = 0; j < ninst;j++) {
             
+            
             ObjectData &objectData=m_objects[i][j];
             objectData.isInstanced = true;
             objectData.matind = matIndex[i];
@@ -94,10 +95,10 @@ void Game::Initialize(::IUnknown* window, int width, int height, DXGI_MODE_ROTAT
     float z = -10;
 
     // Recalculamos la matriz de vista
-    XMVECTOR location = XMVectorSet(x, y, z, 1.0f);
-    XMVECTOR target = XMVectorSet(0.0, 0.0, 1.0, 1.0f);
+    m_Position = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+    m_LookDirection = XMVectorSet(0.0f, 0.0f, 1.0f, 1.0f);
     XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    XMMATRIX view = XMMatrixLookAtLH(location, target, up);
+    XMMATRIX view = XMMatrixLookAtLH(m_Position, m_LookDirection, up);
     float r = static_cast<float>(m_outputWidth / m_outputHeight);
     XMMATRIX projection = XMMatrixPerspectiveFovLH(0.25 * XM_PI, r, 0.5f, 1000.0f);
     XMStoreFloat4x4(&m_view, view);
@@ -153,10 +154,7 @@ void Game::Update(DX::StepTimer const& timer)
 
     // TODO: Actualización de las transformaciones en la escena
 
-    //float x = 0.0;
-    //float y = 0.0;
-    //float z = -10;
-
+    
     m_controller->Update();
 
     XMVECTOR velocity;
@@ -204,6 +202,15 @@ void Game::Update(DX::StepTimer const& timer)
 
 
             XMMATRIX worldview = world * view;
+            XMFLOAT4X4 wv;
+            XMStoreFloat4x4(&wv, worldview);
+            float x = wv._41;
+            float y = wv._42;
+            float z = wv._43;
+
+            //float d = x * x + y * y + z * z;
+
+
             XMMATRIX transform = worldview * projection;
             XMMATRIX normaltransform = XMMatrixTranspose(XMMatrixInverse(nullptr, worldview));
             XMStoreFloat4x4(&m_vInstances[m_backBufferIndex][i][count].NormalTransform, XMMatrixTranspose(normaltransform));
